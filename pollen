@@ -1,0 +1,73 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from skimage import feature
+
+'''
+Ce code contient deux fonctions :
+    
+        generate_pollen_image
+    prends la distance entre la source lumineuse et l'écran, la longueur d'onde du laser,
+    la taille de l'image et le nombre de pollens qui apparaissent (aléatoire si non renseigné)
+    et renvoie une image de diffraction
+
+        detect_pollen
+    prend l'image générée par generate_pollen_image et renvoie le nombre de grains de pollens
+    détécté dans l'image
+
+En bas du code, on peut modifier certains paramètres. 
+Un appel à la fonction generate_pollen_image génère une image, affichée par plt.show()
+Un appel à la fonction detect_pollen est appliqué sur cette image.
+Le nombre de grains estimé est comparé au nombre de grains réel.
+
+Pour le cas réel, il faudra modifier les paramètres de la fonction estimateur detect_pollen
+'''
+
+def generate_pollen_image(distance, wavelength, image_size=256, num_pollens=None):
+    if num_pollens is None:
+        num_pollens = np.random.randint(5, 15) #random number of pollen is unspecified
+
+    pollen_diameters = np.random.uniform(50e-9, 100e-9, num_pollens) #random size of pollen
+    pollen_positions = np.random.rand(num_pollens, 2) * image_size #random position of pollen
+
+    x = np.linspace(0, image_size, image_size) #np.linspace génère un tableau d'un nombre spécifié de valeurs, 256 valeurs croissantes entre 0 et 256
+    y = np.linspace(0, image_size, image_size)
+    X, Y = np.meshgrid(x, y) #créer une grille de coordonnées
+
+    intensity = np.zeros((image_size, image_size)) #we start with a blank (black) image
+    k = 2 * np.pi / wavelength #Calcule la constante de propagation de l'onde
+
+    for i in range(num_pollens): #generation of pollen trace
+        dx = X - pollen_positions[i, 0]
+        dy = Y - pollen_positions[i, 1]
+        r = np.sqrt(dx**2 + dy**2) #distance de chaque point de l'image à la position de la particule de pollen
+        a = pollen_diameters[i] / 2
+        J1_arg = k * a * r / distance #fonction de Bessel du premier ordre, utilisée pour modéliser la diffraction de la lumière
+        J1 = 2 * np.pi * a**2 * np.sinc(J1_arg/np.pi) / distance**2
+
+        intensity += J1**2
+
+    intensity += 0.01 * np.mean(intensity) * np.random.normal(0,1, np.shape(intensity)) # Ajoute du bruit gaussien à l'image, proportionnel à l'intensité lumineuse moyenne de l'image
+    intensity += np.min(intensity)
+    
+    return intensity / np.max(intensity), num_pollens
+
+def detect_pollen(image, min_sigma=1, max_sigma=50, num_sigma=10, threshold=0.01):
+    blobs = feature.blob_log(image, min_sigma=min_sigma, max_sigma=max_sigma, num_sigma=num_sigma, threshold=threshold)
+    return len(blobs)
+
+## PARAMETERS ##
+
+distance = 20e-2  # meters (between light source and screen)
+wavelength = 633e-9  # meters (wavelength, green light)
+image_size = 256
+
+# POLLEN IMAGE GENERATION #
+intensity, true_num_pollens = generate_pollen_image(distance, wavelength, image_size)
+plt.imshow(intensity, cmap='gray', vmin=0, vmax=1)
+plt.show()
+
+# POLLEN COUNTING #
+predict_num_pollens = detect_pollen(intensity)
+
+print(f"Nombre estimé de grains de pollen: {predict_num_pollens}")
+print(f"Nombre réel de grains de pollen: {true_num_pollens}")
